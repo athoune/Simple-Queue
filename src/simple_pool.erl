@@ -97,17 +97,21 @@ handle_cast({add_worker, WorkerPid}, #state{workers = Workers} = State) ->
     {noreply, State#state{workers = [WorkerPid | Workers]}};
 
 handle_cast({release, WorkerPid}, #state{workers = Workers, queue = Queue, reserved=Reserved} = State) ->
-    NewQueue = case queue:len(Queue) of
-        0 -> Queue;
+    {NewWorkers, NewQueue, NewReserved} = case Queue of
+        [] ->
+            { [WorkerPid | Workers],
+              Queue,
+              lists:delete(WorkerPid, Reserved) };
         _ ->
-            {{value, From}, Queue2} = queue:out(Queue),
-            [WorkerPid | NewWorkers] = Workers, 
-            From ! {worker, WorkerPid},
-            Queue2
+            {_, Queue2} = queue:out(Queue),
+            % TODO: call just queued task
+            { Workers,
+              Queue2,
+              Reserved }
     end,
     {noreply, State#state{
-        reserved = lists:delete(WorkerPid, Reserved),
-        workers = [WorkerPid | Workers],
+        reserved = NewReserved,
+        workers = NewWorkers,
         queue = NewQueue
     }};
     
